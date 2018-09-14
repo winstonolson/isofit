@@ -2,7 +2,7 @@ stages:
   - install
   - script
   - name: deploy
-    if: (branch != master) AND (type = cron)
+    if: (type = cron) AND (branch != master)
 language: python
 python:
   - '3.6'
