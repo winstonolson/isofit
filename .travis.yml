@@ -2,7 +2,7 @@ stages:
   - install
   - script
   - name: deploy
-    if: (type = cron)
+    if: branch = test-travis
 language: python
 python:
   - '3.6'
