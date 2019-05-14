@@ -26,6 +26,7 @@ from scipy.linalg import inv, norm, sqrtm, det
 from scipy.io import savemat
 from inverse_simple import invert_simple, invert_algebraic
 from spectral.io import envi
+from spectral import open_image
 from common import load_spectrum, resample_spectrum, expand_all_paths
 import logging
 from collections import OrderedDict
@@ -133,7 +134,10 @@ class SpectrumFile:
                         logging.error('Must specify %s' % (k))
                         raise IOError('Must specify %s' % (k))
 
-                self.file = envi.create_image(fname+'.hdr', meta, ext='',
+                if os.path.exists(fname):
+                    self.file = open_image(fname+'.hdr')
+                else:
+                    self.file = envi.create_image(fname+'.hdr', meta, ext='',
                                               force=True)
 
             self.open_map_with_retries()
