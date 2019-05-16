@@ -26,7 +26,6 @@ from scipy.linalg import inv, norm, sqrtm, det
 from scipy.io import savemat
 from inverse_simple import invert_simple, invert_algebraic
 from spectral.io import envi
-from spectral import open_image
 from common import load_spectrum, resample_spectrum, expand_all_paths
 import logging
 from collections import OrderedDict
@@ -135,7 +134,7 @@ class SpectrumFile:
                         raise IOError('Must specify %s' % (k))
 
                 if os.path.exists(fname):
-                    self.file = open_image(fname+'.hdr')
+                    self.file = envi.open(fname+'.hdr', fname)
                 else:
                     self.file = envi.create_image(fname+'.hdr', meta, ext='',
                                               force=True)
@@ -214,8 +213,9 @@ class SpectrumFile:
                     else:
                         self.memmap[row, valid, :] = frame[valid, :]
             self.frames = OrderedDict()
-            del self.file
-            self.file = envi.open(self.fname+'.hdr', self.fname)
+            del self.memmap
+#            del self.file
+#            self.file = envi.open(self.fname+'.hdr', self.fname)
             self.open_map_with_retries()
 
 
@@ -539,6 +539,7 @@ class IO:
 
         for product in self.outfiles:
             logging.debug('IO: Writing '+product)
+            logging.debug('IO: Row: %i  Col: %i' % (row,col))  
             self.outfiles[product].write_spectrum(row, col, to_write[product])
             if (self.writes % flush_rate) == 0:
                 self.outfiles[product].flush_buffers()
