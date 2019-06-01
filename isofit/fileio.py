@@ -147,7 +147,7 @@ class SpectrumFile:
                 #                               force=True)
 
                 # WO
-                self.np_fname = fname + '-' + \
+                self.np_fname = fname + '.' + \
                                 '_'.join([str(self.active_rows[0]), str(self.active_rows[-1]),
                                           str(self.active_cols[0]), str(self.active_cols[-1])]) + '.npy'
                 print("### active_rows active_cols: ")
