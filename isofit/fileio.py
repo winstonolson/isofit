@@ -30,7 +30,7 @@ from common import load_spectrum, resample_spectrum, expand_all_paths
 import logging
 from collections import OrderedDict
 from geometry import Geometry
-
+import numpy as np
 
 # Constants related to file I/O
 typemap = {s.uint8: 1, s.int16: 2, s.int32: 3, s.float32: 4, s.float64: 5,
@@ -45,6 +45,7 @@ class SpectrumFile:
         formatting, etc."""
 
     def __init__(self, fname, write=False, n_rows=None, n_cols=None,
+                 active_rows=None, active_cols=None,
                  n_bands=None, interleave=None, dtype=s.float32,
                  wavelengths=None, fwhm=None, band_names=None,
                  bad_bands=[], zrange='{0.0, 1.0}',
@@ -59,6 +60,8 @@ class SpectrumFile:
         self.n_rows = n_rows
         self.n_cols = n_cols
         self.n_bands = n_bands
+        self.active_rows = active_rows
+        self.active_cols = active_cols
 
         if self.fname.endswith('.txt'):
 
@@ -133,13 +136,35 @@ class SpectrumFile:
                         logging.error('Must specify %s' % (k))
                         raise IOError('Must specify %s' % (k))
 
-                if os.path.exists(fname):
-                    self.file = envi.open(fname+'.hdr', fname)
-                else:
-                    self.file = envi.create_image(fname+'.hdr', meta, ext='',
-                                              force=True)
+                # WO Only write header files
+                if not os.path.exists(fname + '.hdr'):
+                    envi.write_envi_header(fname + '.hdr', meta)
 
-            self.open_map_with_retries()
+                # if os.path.exists(fname):
+                #     self.file = envi.open(fname+'.hdr', fname)
+                # else:
+                #     self.file = envi.create_image(fname+'.hdr', meta, ext='',
+                #                               force=True)
+
+                # WO
+                self.np_fname = fname + '-' + \
+                                '_'.join([str(self.active_rows[0]), str(self.active_rows[-1]),
+                                          str(self.active_cols[0]), str(self.active_cols[-1])]) + '.npy'
+                print("### active_rows active_cols: ")
+                print(self.active_rows)
+                print(self.active_cols)
+                #self.np_shape = (len(self.active_rows), len(self.active_cols), self.n_bands)
+                self.np_shape = (len(self.active_rows), self.n_cols, self.n_bands)
+                if os.path.exists(self.np_fname):
+                    self.np_memmap = np.memmap(self.np_fname, shape=self.np_shape, dtype=np.float32, mode='r+')
+                else:
+                    np_arr = np.full(self.np_shape, -9999, dtype=np.float32)
+                    self.np_file = np.save(self.np_fname, np_arr)
+                    self.np_memmap = np.memmap(self.np_fname, shape=self.np_shape, dtype=np.float32, mode='r+')
+
+            # WO only perform for read only files
+            if not self.write:
+                self.open_map_with_retries()
 
     def open_map_with_retries(self):
         """Try to open a memory map, handling Beowulf I/O issues"""
@@ -147,6 +172,7 @@ class SpectrumFile:
         for attempt in range(10):
             self.memmap = self.file.open_memmap(interleave='source',
                                                 writable=self.write)
+
             if self.memmap is not None:
                 return
         raise IOError('could not open memmap for '+self.fname)
@@ -208,15 +234,25 @@ class SpectrumFile:
             if self.write:
                 for row, frame in self.frames.items():
                     valid = s.logical_not(s.isnan(frame[:, 0]))
-                    if self.file.metadata['interleave'] == 'bil':
-                        self.memmap[row, :, valid] = frame[valid, :].T
-                    else:
-                        self.memmap[row, valid, :] = frame[valid, :]
-            self.frames = OrderedDict()
-            del self.memmap
-#            del self.file
-#            self.file = envi.open(self.fname+'.hdr', self.fname)
-            self.open_map_with_retries()
+#                    if self.file.metadata['interleave'] == 'bil':
+#                        self.memmap[row, :, valid] = frame[valid, :].T
+#                    else:
+#                        self.memmap[row, valid, :] = frame[valid, :]
+                    print('### flush_buffers row: ' + str(row))
+                    print('### len(active_cols): %i' % len(self.active_cols))
+                    print('### len(valid slice): %i' % len(valid[self.active_cols]))
+                    print(self.np_memmap.shape)
+                    print(frame.shape)
+                    # WO uncomment below to write based on active_cols
+                    #self.np_memmap[row - self.active_rows[0], :, :] = frame[valid == True, :]
+                    self.np_memmap[row - self.active_rows[0], :, :] = frame[:, :]
+                del self.np_memmap
+                self.np_memmap = np.memmap(self.np_fname, shape=self.np_shape, dtype=np.float32, mode='r+')
+#            self.frames = OrderedDict()
+#            del self.memmap
+##            del self.file
+##           self.file = envi.open(self.fname+'.hdr', self.fname)
+#            self.open_map_with_retries()
 
 
 class IO:
@@ -349,6 +385,7 @@ class IO:
                 n_bands = len(band_names)
                 self.outfiles[q] = SpectrumFile(self.output[q], write=True,
                                                 n_rows=self.n_rows, n_cols=self.n_cols,
+                                                active_rows=active_rows, active_cols=active_cols,
                                                 n_bands=n_bands, interleave='bip', dtype=s.float32,
                                                 wavelengths=self.meas_wl, fwhm=self.meas_fwhm,
                                                 band_names=band_names, bad_bands=self.bbl,
