@@ -104,6 +104,7 @@ def main():
     ])
 
     if rank == 0:
+        print("### MPI size: %i" % size)
         active = {n : None for n in range(1, size)}
         io = IO(config, fm, iv, rows, cols)
 
@@ -148,6 +149,8 @@ def main():
                 io.write_spectrum(row, col, to_write)
                 active[worker] = None
 
+        # WO: Maybe flush_buffers here after the while loop
+
     else:
         while True:
             comm.send(None, dest=0, tag=tags.READY)
@@ -156,6 +159,7 @@ def main():
 
             if tag == tags.PREPARE:
                 row, col, meas, geom, configs = recv_io(comm, tags, status)
+                print("#### worker rank %i doing row %i and col %i" % (rank,row,col))
 
                 # No guarantee that profiling will still work with MPI.
                 if args.profile:
